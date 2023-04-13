@@ -140,6 +140,8 @@ export function updateValueIfChanged(node: ElementWithValueTracker): boolean {
 
   const lastValue = tracker.getValue();
   const nextValue = getValueFromNode(node);
+
+  console.log('###', lastValue, nextValue);
   if (nextValue !== lastValue) {
     tracker.setValue(nextValue);
     return true;

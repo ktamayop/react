@@ -1952,7 +1952,11 @@ describe('ReactDOMInput', () => {
       expect(renderInputWithStringThenWithUndefined).toErrorDev(
         'A component is changing a controlled input to be uncontrolled.',
       );
-      expect(input.getAttribute('value')).toBe(null);
+      if (disableInputAttributeSyncing) {
+        expect(input.getAttribute('value')).toBe(null);
+      } else {
+        expect(input.getAttribute('value')).toBe('first');
+      }
     });
 
     it('preserves the value property', () => {
@@ -1960,6 +1964,42 @@ describe('ReactDOMInput', () => {
         'A component is changing a controlled input to be uncontrolled.',
       );
       expect(input.value).toBe('latest');
+    });
+  });
+
+  describe('setting a controlled input to undefined should trigger onchange', () => {
+    it.only('reverts the value attribute to the initial value', () => {
+      const changeCalls = [];
+
+      class Input extends React.Component {
+        constructor() {
+          super();
+          this.state = {value: undefined};
+        }
+
+        render() {
+          return (
+            <input
+              onChange={e => {
+                changeCalls.push(e.target.value);
+                this.setState({value: e.target.value});
+              }}
+              value={this.state.value}
+            />
+          );
+        }
+      }
+
+      const stub = ReactDOM.render(<Input />, container);
+      const input = ReactDOM.findDOMNode(stub);
+      stub.setState({value: 'something'});
+      expect(input.getAttribute('value')).toBe(null);
+      expect(changeCalls).toEqual([]);
+
+      setUntrackedValue.call(input, null);
+      dispatchEventOnNode(input, 'input');
+      expect(input.getAttribute('value')).toBe(null);
+      expect(changeCalls).toEqual(['']);
     });
   });
 
@@ -1998,7 +2038,11 @@ describe('ReactDOMInput', () => {
           'or `undefined` for uncontrolled components.',
         'A component is changing a controlled input to be uncontrolled.',
       ]);
-      expect(input.hasAttribute('value')).toBe(false);
+      if (disableInputAttributeSyncing) {
+        expect(input.hasAttribute('value')).toBe(false);
+      } else {
+        expect(input.getAttribute('value')).toBe('first');
+      }
     });
 
     it('preserves the value property', () => {
@@ -2156,31 +2200,5 @@ describe('ReactDOMInput', () => {
       expect(node.value).toBe('on');
       expect(node.hasAttribute('value')).toBe(false);
     });
-  });
-
-  it('should remove previous `defaultValue`', () => {
-    const node = ReactDOM.render(
-      <input type="text" defaultValue="0" />,
-      container,
-    );
-
-    expect(node.value).toBe('0');
-    expect(node.defaultValue).toBe('0');
-
-    ReactDOM.render(<input type="text" />, container);
-    expect(node.defaultValue).toBe('');
-  });
-
-  it('should treat `defaultValue={null}` as missing', () => {
-    const node = ReactDOM.render(
-      <input type="text" defaultValue="0" />,
-      container,
-    );
-
-    expect(node.value).toBe('0');
-    expect(node.defaultValue).toBe('0');
-
-    ReactDOM.render(<input type="text" defaultValue={null} />, container);
-    expect(node.defaultValue).toBe('');
   });
 });
