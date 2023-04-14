@@ -557,90 +557,105 @@ export type DataType =
 /**
  * Get a enhanced/artificial type string based on the object instance
  */
-export function getDataType(data: Object): DataType {
-  if (data === null) {
-    return 'null';
-  } else if (data === undefined) {
-    return 'undefined';
-  }
+export function isNullOrUndefined(data) {
+  return data === null ? 'null' : data === undefined ? 'undefined' : false;
+}
 
-  if (isElement(data)) {
-    return 'react_element';
-  }
+function isFunction(data) {
+  return typeof data === 'function' ? 'function' : false;
+}
 
-  if (typeof HTMLElement !== 'undefined' && data instanceof HTMLElement) {
-    return 'html_element';
-  }
+function isTypedArray(data) {
+  return ArrayBuffer.isView(data) ?
+    (hasOwnProperty.call(data.constructor, 'BYTES_PER_ELEMENT') ? 'typed_array' : 'data_view') :
+    false;
+}
 
-  const type = typeof data;
-  switch (type) {
-    case 'bigint':
-      return 'bigint';
-    case 'boolean':
-      return 'boolean';
-    case 'function':
-      return 'function';
+function isPlainObject(value) {
+  if (Object.prototype.toString.call(value) !== '[object Object]') {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === null || prototype === Object.getPrototypeOf({});
+}
+
+function isPlainValueType(data) {
+  const typeofData = typeof data;
+  switch (typeofData) {
     case 'number':
-      if (Number.isNaN(data)) {
-        return 'nan';
-      } else if (!Number.isFinite(data)) {
-        return 'infinity';
-      } else {
-        return 'number';
-      }
-    case 'object':
-      if (isArray(data)) {
-        return 'array';
-      } else if (ArrayBuffer.isView(data)) {
-        return hasOwnProperty.call(data.constructor, 'BYTES_PER_ELEMENT')
-          ? 'typed_array'
-          : 'data_view';
-      } else if (data.constructor && data.constructor.name === 'ArrayBuffer') {
-        // HACK This ArrayBuffer check is gross; is there a better way?
-        // We could try to create a new DataView with the value.
-        // If it doesn't error, we know it's an ArrayBuffer,
-        // but this seems kind of awkward and expensive.
-        return 'array_buffer';
-      } else if (typeof data[Symbol.iterator] === 'function') {
-        const iterator = data[Symbol.iterator]();
-        if (!iterator) {
-          // Proxies might break assumptoins about iterators.
-          // See github.com/facebook/react/issues/21654
-        } else {
-          return iterator === data ? 'opaque_iterator' : 'iterator';
-        }
-      } else if (data.constructor && data.constructor.name === 'RegExp') {
-        return 'regexp';
-      } else {
-        // $FlowFixMe[method-unbinding]
-        const toStringValue = Object.prototype.toString.call(data);
-        if (toStringValue === '[object Date]') {
-          return 'date';
-        } else if (toStringValue === '[object HTMLAllCollection]') {
-          return 'html_all_collection';
-        }
-      }
-
-      if (!isPlainObject(data)) {
-        return 'class_instance';
-      }
-
-      return 'object';
+      return isNaN(data) ? 'nan' : !isFinite(data) ? 'infinity' : 'number';
     case 'string':
       return 'string';
     case 'symbol':
       return 'symbol';
-    case 'undefined':
-      if (
-        // $FlowFixMe[method-unbinding]
-        Object.prototype.toString.call(data) === '[object HTMLAllCollection]'
-      ) {
-        return 'html_all_collection';
-      }
-      return 'undefined';
+    case 'bigint':
+      return 'bigint';
     default:
-      return 'unknown';
+      return false;
   }
+}
+
+function isPlainCollection(data) {
+  if (isPlainValueType(data)) {
+    return false;
+  }
+  return typeof data[Symbol.iterator] === 'function' ? isIterator(data) : isArrayBuffer(data);
+}
+
+function isReactElement(data) {
+  return isElement(data) ? 'react_element' : false;
+}
+
+function isHtmlElement(data) {
+  return typeof HTMLElement !== 'undefined' && data instanceof HTMLElement ? 'html_element' : false;
+}
+
+function isRegExp(data) {
+  return data.constructor && data.constructor.name === 'RegExp' ? 'regexp' : false;
+}
+
+function isGrossHtmlAllCollection(data) {
+  return Object.prototype.toString.call(data) === '[object HTMLAllCollection]' ? 'html_all_collection' : false;
+}
+
+function isDate(data) {
+  return Object.prototype.toString.call(data) === '[object Date]' ? 'date' : false;
+}
+
+function isClassInstance(data) {
+  return !isPlainObject(data) ? 'class_instance' : false;
+}
+
+function isArray(data) {
+  return Array.isArray(data) ? 'array' : false;
+}
+
+function isOpaqueIterator(data, iterator) {
+  return iterator !== data ? 'iterator' : 'opaque_iterator';
+}
+
+function isIterator(data) {
+  const iterator = data[Symbol.iterator] && data[Symbol.iterator]();
+  return iterator ? isOpaqueIterator(data, iterator) : false;
+}
+
+function getDataType(data) {
+  return (
+    isNullOrUndefined(data) ||
+    isPlainValueType(data) ||
+    isReactElement(data) ||
+    isHtmlElement(data) ||
+    isRegExp(data) ||
+    isGrossHtmlAllCollection(data) ||
+    isDate(data) ||
+    isClassInstance(data) ||
+    isArray(data) ||
+    isTypedArray(data) ||
+    isPlainCollection(data) ||
+    isFunction(data) ||
+    isIterator(data) ||
+    'unknown'
+  );
 }
 
 export function getDisplayNameForReactElement(
@@ -693,7 +708,7 @@ function truncateForDisplay(
   length: number = MAX_PREVIEW_STRING_LENGTH,
 ) {
   if (string.length > length) {
-    return string.substr(0, length) + '…';
+    return string.substr(0, length) + 'â€¦';
   } else {
     return string;
   }
@@ -709,7 +724,7 @@ function truncateForDisplay(
 //   };
 //
 // Would show a preview of...
-//   {foo: 123, bar: "abc", baz: Array(2), qux: {…}}
+//   {foo: 123, bar: "abc", baz: Array(2), qux: {â€¦}}
 //
 // And the following value...
 //   [
@@ -720,7 +735,7 @@ function truncateForDisplay(
 //   ];
 //
 // Would show a preview of...
-//   [123, "abc", Array(2), {…}]
+//   [123, "abc", Array(2), {â€¦}]
 export function formatDataForPreview(
   data: any,
   showFormattedValue: boolean,
@@ -738,7 +753,7 @@ export function formatDataForPreview(
       return `<${truncateForDisplay(data.tagName.toLowerCase())} />`;
     case 'function':
       return truncateForDisplay(
-        `ƒ ${typeof data.name === 'function' ? '' : data.name}() {}`,
+        `Æ’ ${typeof data.name === 'function' ? '' : data.name}() {}`,
       );
     case 'string':
       return `"${data}"`;
@@ -863,7 +878,7 @@ export function formatDataForPreview(
         }
         return `{${truncateForDisplay(formatted)}}`;
       } else {
-        return '{…}';
+        return '{â€¦}';
       }
     case 'boolean':
     case 'number':
