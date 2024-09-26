@@ -557,90 +557,125 @@ export type DataType =
 /**
  * Get a enhanced/artificial type string based on the object instance
  */
-export function getDataType(data: Object): DataType {
+export type DataType =
+  | 'null'
+  | 'undefined'
+  | 'boolean'
+  | 'number'
+  | 'string'
+  | 'symbol'
+  | 'react_element'
+  | 'html_element'
+  | 'bigint'
+  | 'array'
+  | 'typed_array'
+  | 'data_view'
+  | 'array_buffer'
+  | 'iterator'
+  | 'regexp'
+  | 'date'
+  | 'html_all_collection'
+  | 'class_instance'
+  | 'opaque_iterator'
+  | 'unknown';
+
+function getDataType(data: any): DataType {
   if (data === null) {
     return 'null';
-  } else if (data === undefined) {
+  }
+
+  if (typeof data === 'undefined') {
     return 'undefined';
   }
 
-  if (isElement(data)) {
+  if (typeof data === 'boolean') {
+    return 'boolean';
+  }
+
+  if (typeof data === 'number') {
+    if (Number.isNaN(data)) {
+      return 'nan';
+    }
+    if (!Number.isFinite(data)) {
+      return 'infinity';
+    }
+    return 'number';
+  }
+
+  if (typeof data === 'string') {
+    return 'string';
+  }
+
+  if (typeof data === 'symbol') {
+    return 'symbol';
+  }
+
+  if (
+    typeof data === 'object' &&
+    typeof data.$$typeof === 'symbol' &&
+    data.$$typeof === Symbol.for('react.element')
+  ) {
     return 'react_element';
   }
 
-  if (typeof HTMLElement !== 'undefined' && data instanceof HTMLElement) {
+  if (
+    typeof HTMLElement !== 'undefined' &&
+    data instanceof HTMLElement
+  ) {
     return 'html_element';
   }
 
-  const type = typeof data;
-  switch (type) {
-    case 'bigint':
-      return 'bigint';
-    case 'boolean':
-      return 'boolean';
-    case 'function':
-      return 'function';
-    case 'number':
-      if (Number.isNaN(data)) {
-        return 'nan';
-      } else if (!Number.isFinite(data)) {
-        return 'infinity';
-      } else {
-        return 'number';
-      }
-    case 'object':
-      if (isArray(data)) {
-        return 'array';
-      } else if (ArrayBuffer.isView(data)) {
-        return hasOwnProperty.call(data.constructor, 'BYTES_PER_ELEMENT')
-          ? 'typed_array'
-          : 'data_view';
-      } else if (data.constructor && data.constructor.name === 'ArrayBuffer') {
-        // HACK This ArrayBuffer check is gross; is there a better way?
-        // We could try to create a new DataView with the value.
-        // If it doesn't error, we know it's an ArrayBuffer,
-        // but this seems kind of awkward and expensive.
-        return 'array_buffer';
-      } else if (typeof data[Symbol.iterator] === 'function') {
-        const iterator = data[Symbol.iterator]();
-        if (!iterator) {
-          // Proxies might break assumptoins about iterators.
-          // See github.com/facebook/react/issues/21654
-        } else {
-          return iterator === data ? 'opaque_iterator' : 'iterator';
-        }
-      } else if (data.constructor && data.constructor.name === 'RegExp') {
-        return 'regexp';
-      } else {
-        // $FlowFixMe[method-unbinding]
-        const toStringValue = Object.prototype.toString.call(data);
-        if (toStringValue === '[object Date]') {
-          return 'date';
-        } else if (toStringValue === '[object HTMLAllCollection]') {
-          return 'html_all_collection';
-        }
-      }
-
-      if (!isPlainObject(data)) {
-        return 'class_instance';
-      }
-
-      return 'object';
-    case 'string':
-      return 'string';
-    case 'symbol':
-      return 'symbol';
-    case 'undefined':
-      if (
-        // $FlowFixMe[method-unbinding]
-        Object.prototype.toString.call(data) === '[object HTMLAllCollection]'
-      ) {
-        return 'html_all_collection';
-      }
-      return 'undefined';
-    default:
-      return 'unknown';
+  if (typeof data === 'bigint') {
+    return 'bigint';
   }
+
+  if (Array.isArray(data)) {
+    return 'array';
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return hasOwnProperty.call(data.constructor, 'BYTES_PER_ELEMENT')
+      ? 'typed_array'
+      : 'data_view';
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return 'array_buffer';
+  }
+
+  if (
+    typeof data[Symbol.iterator] === 'function' &&
+    typeof data.values === 'function'
+  ) {
+    const iterator = data[Symbol.iterator]();
+    if (iterator !== data) {
+      return 'iterator';
+    }
+  }
+
+  if (data instanceof RegExp) {
+    return 'regexp';
+  }
+
+  if (Object.prototype.toString.call(data) === '[object Date]') {
+    return 'date';
+  }
+
+  if (
+    typeof HTMLAllCollection !== 'undefined' &&
+    data instanceof HTMLAllCollection
+  ) {
+    return 'html_all_collection';
+  }
+
+  if (
+    typeof data === 'object' &&
+    Object.getPrototypeOf(data) !== Object.prototype
+  ) {
+    return 'class_instance';
+  }
+
+  return 'unknown';
 }
 
 export function getDisplayNameForReactElement(
@@ -693,7 +728,7 @@ function truncateForDisplay(
   length: number = MAX_PREVIEW_STRING_LENGTH,
 ) {
   if (string.length > length) {
-    return string.substr(0, length) + '…';
+    return string.substr(0, length) + 'â€¦';
   } else {
     return string;
   }
@@ -709,7 +744,7 @@ function truncateForDisplay(
 //   };
 //
 // Would show a preview of...
-//   {foo: 123, bar: "abc", baz: Array(2), qux: {…}}
+//   {foo: 123, bar: "abc", baz: Array(2), qux: {â€¦}}
 //
 // And the following value...
 //   [
@@ -720,7 +755,7 @@ function truncateForDisplay(
 //   ];
 //
 // Would show a preview of...
-//   [123, "abc", Array(2), {…}]
+//   [123, "abc", Array(2), {â€¦}]
 export function formatDataForPreview(
   data: any,
   showFormattedValue: boolean,
@@ -738,7 +773,7 @@ export function formatDataForPreview(
       return `<${truncateForDisplay(data.tagName.toLowerCase())} />`;
     case 'function':
       return truncateForDisplay(
-        `ƒ ${typeof data.name === 'function' ? '' : data.name}() {}`,
+        `Æ’ ${typeof data.name === 'function' ? '' : data.name}() {}`,
       );
     case 'string':
       return `"${data}"`;
@@ -863,7 +898,7 @@ export function formatDataForPreview(
         }
         return `{${truncateForDisplay(formatted)}}`;
       } else {
-        return '{…}';
+        return '{â€¦}';
       }
     case 'boolean':
     case 'number':
