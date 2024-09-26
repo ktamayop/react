@@ -557,90 +557,160 @@ export type DataType =
 /**
  * Get a enhanced/artificial type string based on the object instance
  */
-export function getDataType(data: Object): DataType {
-  if (data === null) {
+export function getTypeOf(value: unknown): string {
+  if (value === null) {
     return 'null';
-  } else if (data === undefined) {
+  }
+
+  if (value === undefined) {
     return 'undefined';
   }
 
-  if (isElement(data)) {
+  if (isElement(value)) {
     return 'react_element';
   }
 
-  if (typeof HTMLElement !== 'undefined' && data instanceof HTMLElement) {
+  if (typeof HTMLElement !== 'undefined' && value instanceof HTMLElement) {
     return 'html_element';
   }
 
-  const type = typeof data;
-  switch (type) {
-    case 'bigint':
-      return 'bigint';
-    case 'boolean':
-      return 'boolean';
-    case 'function':
-      return 'function';
-    case 'number':
-      if (Number.isNaN(data)) {
-        return 'nan';
-      } else if (!Number.isFinite(data)) {
-        return 'infinity';
-      } else {
-        return 'number';
-      }
-    case 'object':
-      if (isArray(data)) {
-        return 'array';
-      } else if (ArrayBuffer.isView(data)) {
-        return hasOwnProperty.call(data.constructor, 'BYTES_PER_ELEMENT')
-          ? 'typed_array'
-          : 'data_view';
-      } else if (data.constructor && data.constructor.name === 'ArrayBuffer') {
-        // HACK This ArrayBuffer check is gross; is there a better way?
-        // We could try to create a new DataView with the value.
-        // If it doesn't error, we know it's an ArrayBuffer,
-        // but this seems kind of awkward and expensive.
-        return 'array_buffer';
-      } else if (typeof data[Symbol.iterator] === 'function') {
-        const iterator = data[Symbol.iterator]();
-        if (!iterator) {
-          // Proxies might break assumptoins about iterators.
-          // See github.com/facebook/react/issues/21654
-        } else {
-          return iterator === data ? 'opaque_iterator' : 'iterator';
-        }
-      } else if (data.constructor && data.constructor.name === 'RegExp') {
-        return 'regexp';
-      } else {
-        // $FlowFixMe[method-unbinding]
-        const toStringValue = Object.prototype.toString.call(data);
-        if (toStringValue === '[object Date]') {
-          return 'date';
-        } else if (toStringValue === '[object HTMLAllCollection]') {
-          return 'html_all_collection';
-        }
-      }
-
-      if (!isPlainObject(data)) {
-        return 'class_instance';
-      }
-
-      return 'object';
-    case 'string':
-      return 'string';
-    case 'symbol':
-      return 'symbol';
-    case 'undefined':
-      if (
-        // $FlowFixMe[method-unbinding]
-        Object.prototype.toString.call(data) === '[object HTMLAllCollection]'
-      ) {
-        return 'html_all_collection';
-      }
-      return 'undefined';
-    default:
-      return 'unknown';
+  if (isBigInt(value)) {
+    return 'bigint';
   }
+
+  if (isBoolean(value)) {
+    return 'boolean';
+  }
+
+  if (isFunction(value)) {
+    return 'function';
+  }
+
+  if (isNumber(value)) {
+    return getNumberType(value);
+  }
+
+  if (isObject(value)) {
+    return getObjectType(value);
+  }
+
+  if (isString(value)) {
+    return 'string';
+  }
+
+  if (isSymbol(value)) {
+    return 'symbol';
+  }
+
+  return 'unknown';
+}
+
+function isArray(obj: any) {
+  return Array.isArray(obj);
+}
+
+function isPlainObject(obj: any) {
+  if (typeof obj !== 'object' || obj === null) return false;
+
+  let proto = obj;
+  while (Object.getPrototypeOf(proto) !== null) {
+    proto = Object.getPrototypeOf(proto);
+  }
+
+  return Object.getPrototypeOf(obj) === proto;
+}
+
+function isElement(obj: any) {
+  return typeof obj === 'object' && obj !== null && typeof obj.type === 'string';
+}
+
+function isBigInt(obj: any) {
+  return typeof obj === 'bigint';
+}
+
+function isBoolean(obj: any) {
+  return typeof obj === 'boolean';
+}
+
+function isFunction(obj: any) {
+  return typeof obj === 'function';
+}
+
+function isNumber(obj: any) {
+  return typeof obj === 'number' && !isNaN(obj) && isFinite(obj);
+}
+
+function isObject(obj: any) {
+  return typeof obj === 'object' && obj !== null;
+}
+
+function isString(obj: any) {
+  return typeof obj === 'string';
+}
+
+function isSymbol(obj: any) {
+  return typeof obj === 'symbol';
+}
+
+function getNumberType(num: number): string {
+  if (Number.isNaN(num)) {
+    return 'nan';
+  }
+
+  if (num === Infinity || num === -Infinity) {
+    return 'infinity';
+  }
+
+  return 'number';
+}
+
+function getObjectType(obj: object): string {
+  if (isArray(obj)) {
+    return 'array';
+  }
+
+  if (obj instanceof ArrayBuffer) {
+    return 'array_buffer';
+  }
+
+  if (ArrayBuffer.isView(obj)) {
+    return getViewType(obj);
+  }
+
+  if (typeof obj[Symbol.iterator] === 'function') {
+    const iterator = obj[Symbol.iterator]();
+    if (iterator) {
+      return iterator === obj ? 'opaque_iterator' : 'iterator';
+    }
+  }
+
+  if (obj instanceof RegExp) {
+    return 'regexp';
+  }
+
+  const toStringValue = Object.prototype.toString.call(obj);
+
+  switch (toStringValue) {
+    case '[object Date]':
+      return 'date';
+    case '[object Object]':
+      if (isPlainObject(obj)) {
+        return 'object';
+      }
+      break;
+    case '[object HTMLAllCollection]':
+      return 'html_all_collection';
+    default:
+      break;
+  }
+
+  return 'class_instance';
+}
+
+function getViewType(view: any) {
+  const constructor = view.constructor;
+  const hasByteLength = hasOwnProperty.call(constructor, 'BYTES_PER_ELEMENT');
+  return hasByteLength ? 'typed_array' : 'data_view';
 }
 
 export function getDisplayNameForReactElement(
@@ -693,7 +763,7 @@ function truncateForDisplay(
   length: number = MAX_PREVIEW_STRING_LENGTH,
 ) {
   if (string.length > length) {
-    return string.substr(0, length) + '…';
+    return string.substr(0, length) + 'â€¦';
   } else {
     return string;
   }
@@ -709,7 +779,7 @@ function truncateForDisplay(
 //   };
 //
 // Would show a preview of...
-//   {foo: 123, bar: "abc", baz: Array(2), qux: {…}}
+//   {foo: 123, bar: "abc", baz: Array(2), qux: {â€¦}}
 //
 // And the following value...
 //   [
@@ -720,7 +790,7 @@ function truncateForDisplay(
 //   ];
 //
 // Would show a preview of...
-//   [123, "abc", Array(2), {…}]
+//   [123, "abc", Array(2), {â€¦}]
 export function formatDataForPreview(
   data: any,
   showFormattedValue: boolean,
@@ -738,7 +808,7 @@ export function formatDataForPreview(
       return `<${truncateForDisplay(data.tagName.toLowerCase())} />`;
     case 'function':
       return truncateForDisplay(
-        `ƒ ${typeof data.name === 'function' ? '' : data.name}() {}`,
+        `Æ’ ${typeof data.name === 'function' ? '' : data.name}() {}`,
       );
     case 'string':
       return `"${data}"`;
@@ -863,7 +933,7 @@ export function formatDataForPreview(
         }
         return `{${truncateForDisplay(formatted)}}`;
       } else {
-        return '{…}';
+        return '{â€¦}';
       }
     case 'boolean':
     case 'number':
